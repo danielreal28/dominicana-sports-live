@@ -19,17 +19,35 @@ Correr con:  uvicorn main:app --reload --port 8000
 import asyncio
 import json
 import logging
+import os
+import secrets
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
 import aiohttp
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import bcrypt
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
+from pydantic import BaseModel, EmailStr
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("dr-sports-live")
+
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    SECRET_KEY = secrets.token_hex(32)
+    log.warning(
+        "SECRET_KEY no esta definida en el entorno. Se genero una temporal "
+        "solo para esta ejecucion (las sesiones se invalidan si reinicias "
+        "el servidor). Define SECRET_KEY antes de desplegar a produccion."
+    )
+
+ADMIN_EMAIL = "zonatrialpeliculas@gmail.com"
+DB_FILE = Path(__file__).parent / "usuarios.db"
 
 # ---------- Configuración ----------
 POLL_LIVE_SECONDS = 6
@@ -443,7 +461,86 @@ async def loop_polling():
 
 
 # ---------- App FastAPI ----------
+def init_db():
+    con = sqlite3.connect(DB_FILE)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            es_admin INTEGER NOT NULL DEFAULT 0,
+            fecha_registro TEXT NOT NULL
+        )
+    """)
+    con.commit()
+    con.close()
+
+
+def crear_usuario(email: str, password: str) -> dict:
+    email = email.strip().lower()
+    hash_bytes = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    es_admin = 1 if email == ADMIN_EMAIL else 0
+    fecha = datetime.now(timezone.utc).isoformat()
+    con = sqlite3.connect(DB_FILE)
+    try:
+        con.execute(
+            "INSERT INTO usuarios (email, password_hash, es_admin, fecha_registro) VALUES (?, ?, ?, ?)",
+            (email, hash_bytes.decode("utf-8"), es_admin, fecha),
+        )
+        con.commit()
+    except sqlite3.IntegrityError:
+        con.close()
+        raise HTTPException(status_code=409, detail="Ese correo ya esta registrado")
+    con.close()
+    return {"email": email, "es_admin": bool(es_admin)}
+
+
+def verificar_login(email: str, password: str):
+    email = email.strip().lower()
+    con = sqlite3.connect(DB_FILE)
+    fila = con.execute(
+        "SELECT password_hash, es_admin FROM usuarios WHERE email = ?", (email,)
+    ).fetchone()
+    con.close()
+    if not fila:
+        return None
+    password_hash, es_admin = fila
+    if not bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8")):
+        return None
+    return {"email": email, "es_admin": bool(es_admin)}
+
+
+def listar_usuarios() -> list[dict]:
+    con = sqlite3.connect(DB_FILE)
+    filas = con.execute(
+        "SELECT email, es_admin, fecha_registro FROM usuarios ORDER BY fecha_registro DESC"
+    ).fetchall()
+    con.close()
+    return [{"email": f[0], "es_admin": bool(f[1]), "fecha_registro": f[2]} for f in filas]
+
+
+class CredencialesRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+def usuario_actual(request: Request):
+    email = request.session.get("email")
+    if not email:
+        return None
+    return {"email": email, "es_admin": request.session.get("es_admin", False)}
+
+
+def requerir_admin(request: Request) -> dict:
+    usuario = usuario_actual(request)
+    if not usuario or not usuario["es_admin"]:
+        raise HTTPException(status_code=403, detail="Solo para administradores")
+    return usuario
+
+
 app = FastAPI(title="Dominicana Sports Live")
+
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax")
 
 app.add_middleware(
     CORSMiddleware,
@@ -455,10 +552,51 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
+    init_db()
     async with aiohttp.ClientSession() as session:
         await resolver_ids_jugadores(session)
     asyncio.create_task(loop_polling())
     log.info("Loop de polling iniciado")
+
+
+@app.post("/api/auth/registro")
+async def api_registro(datos: CredencialesRequest, request: Request):
+    if len(datos.password) < 6:
+        raise HTTPException(status_code=400, detail="La contrasena debe tener al menos 6 caracteres")
+    usuario = crear_usuario(datos.email, datos.password)
+    request.session["email"] = usuario["email"]
+    request.session["es_admin"] = usuario["es_admin"]
+    return usuario
+
+
+@app.post("/api/auth/login")
+async def api_login(datos: CredencialesRequest, request: Request):
+    usuario = verificar_login(datos.email, datos.password)
+    if not usuario:
+        raise HTTPException(status_code=401, detail="Correo o contrasena incorrectos")
+    request.session["email"] = usuario["email"]
+    request.session["es_admin"] = usuario["es_admin"]
+    return usuario
+
+
+@app.post("/api/auth/logout")
+async def api_logout(request: Request):
+    request.session.clear()
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+async def api_me(request: Request):
+    usuario = usuario_actual(request)
+    if not usuario:
+        raise HTTPException(status_code=401, detail="No hay sesion activa")
+    return usuario
+
+
+@app.get("/api/admin/usuarios")
+async def api_admin_usuarios(request: Request):
+    requerir_admin(request)
+    return {"usuarios": listar_usuarios()}
 
 
 @app.get("/health")
@@ -474,13 +612,41 @@ async def api_today():
     resultado = []
     for g in juegos:
         teams = g.get("teams", {})
-        resultado.append({
+        estado = g.get("status", {}).get("detailedState", "")
+        item = {
             "game_pk": g.get("gamePk"),
             "matchup": f"{teams.get('away', {}).get('team', {}).get('name', '')} @ {teams.get('home', {}).get('team', {}).get('name', '')}",
             "hora_utc": g.get("gameDate"),
-            "estado": g.get("status", {}).get("detailedState", ""),
-        })
+            "estado": estado,
+            "marcador_visitante": None,
+            "marcador_local": None,
+        }
+        if estado == "Final":
+            item["marcador_visitante"] = teams.get("away", {}).get("score")
+            item["marcador_local"] = teams.get("home", {}).get("score")
+        resultado.append(item)
     return {"fecha": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "juegos": resultado}
+
+
+@app.get("/api/resultados-generales")
+async def api_resultados_generales(dias: int = 2):
+    async with aiohttp.ClientSession() as session:
+        juegos = await obtener_juegos_por_rango(session, dias_atras=dias)
+
+    resultado = []
+    for g in juegos:
+        if g.get("status", {}).get("abstractGameState") != "Final":
+            continue
+        teams = g.get("teams", {})
+        resultado.append({
+            "game_pk": g.get("gamePk"),
+            "matchup": f"{teams.get('away', {}).get('team', {}).get('name', '')} @ {teams.get('home', {}).get('team', {}).get('name', '')}",
+            "marcador_visitante": teams.get("away", {}).get("score"),
+            "marcador_local": teams.get("home", {}).get("score"),
+            "fecha": g.get("officialDate", ""),
+        })
+    resultado.sort(key=lambda x: x["fecha"], reverse=True)
+    return {"juegos": resultado}
 
 
 @app.get("/api/recent")

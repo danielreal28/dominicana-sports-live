@@ -198,14 +198,108 @@
     color: var(--texto);
     margin-right: 6px;
   }
+  .header-derecha { display: flex; align-items: center; gap: 12px; }
+  .btn-auth, .btn-auth-link {
+    background: rgba(0,0,0,0.3);
+    color: white;
+    border: none;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .btn-auth-link { background: none; text-decoration: underline; padding: 0; margin-left: 8px; }
+  #auth-sesion-activa { display: flex; align-items: center; font-size: 12px; }
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-caja {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 28px 24px;
+    width: 90%;
+    max-width: 340px;
+    position: relative;
+  }
+  .modal-cerrar {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 22px;
+    cursor: pointer;
+  }
+  .modal-caja h3 { margin: 0 0 16px 0; }
+  #form-auth { display: flex; flex-direction: column; gap: 10px; }
+  #form-auth input {
+    background: #0b0f16;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--texto);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  #form-auth button[type="submit"] {
+    background: var(--rojo);
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  .auth-error { color: #ff6b6b; font-size: 12px; min-height: 14px; }
+  .auth-toggle { text-align: center; font-size: 13px; color: var(--muted); margin-top: 14px; }
+  .auth-toggle a { color: #7cc4ff; }
+  .footer-copyright { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 16px; }
+  .resultado-card { background: var(--card); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
+  .resultado-fila { display: flex; justify-content: space-between; padding: 3px 0; color: var(--muted); font-size: 14px; }
+  .resultado-fila.gano { color: var(--texto); font-weight: 700; }
+  .resultado-num { min-width: 24px; text-align: right; }
+  .resultado-fecha { font-size: 11px; color: var(--muted); margin-top: 4px; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>🇩🇴 Dominicana Sports Live</h1>
-  <span id="estado" class="desconectado">conectando...</span>
+  <div class="header-derecha">
+    <span id="estado" class="desconectado">conectando...</span>
+    <div id="auth-barra">
+      <button id="btn-abrir-login" class="btn-auth">Iniciar sesión</button>
+      <div id="auth-sesion-activa" style="display:none;">
+        <span id="auth-email-actual"></span>
+        <button id="btn-logout" class="btn-auth-link">Salir</button>
+      </div>
+    </div>
+  </div>
 </header>
+
+<div id="modal-auth" class="modal-overlay" style="display:none;">
+  <div class="modal-caja">
+    <button id="btn-cerrar-modal" class="modal-cerrar">×</button>
+    <h3 id="modal-auth-titulo">Iniciar sesión</h3>
+    <form id="form-auth">
+      <input type="email" id="auth-email" placeholder="Correo electrónico" required>
+      <input type="password" id="auth-password" placeholder="Contraseña (mínimo 6 caracteres)" required minlength="6">
+      <div id="auth-error" class="auth-error"></div>
+      <button type="submit" id="btn-auth-submit">Entrar</button>
+    </form>
+    <p class="auth-toggle">
+      <span id="auth-toggle-texto">¿No tienes cuenta?</span>
+      <a href="#" id="auth-toggle-link">Regístrate</a>
+    </p>
+  </div>
+</div>
 
 <main>
   <section>
@@ -219,6 +313,11 @@
   </section>
 
   <section>
+    <h2>Resultados MLB</h2>
+    <div id="resultados-generales-lista" class="cargando">Cargando resultados...</div>
+  </section>
+
+  <section>
     <h2>Últimos resultados de dominicanos</h2>
     <div id="recent-lista" class="cargando">Cargando resultados recientes...</div>
   </section>
@@ -228,7 +327,16 @@
     <div id="vacio">Esperando jugadas en vivo de peloteros dominicanos...</div>
     <div id="feed"></div>
   </section>
+
+  <section id="admin-seccion" style="display:none;">
+    <h2>Panel de administrador · Usuarios registrados</h2>
+    <div id="admin-usuarios-lista" class="cargando">Cargando usuarios...</div>
+  </section>
 </main>
+
+<footer class="footer-copyright">
+  ZonaTrialApp by DanielReal © 2026
+</footer>
 
 <script>
 const API_BASE = "";
@@ -306,7 +414,9 @@ async function cargarHoy() {
         <span>${j.matchup}</span>
         ${j.estado === "In Progress"
           ? `<span class="badge-live">EN VIVO</span>`
-          : `<span class="hora">${j.estado === "Final" ? "Final" : formatearHora(j.hora_utc)}</span>`}
+          : j.estado === "Final"
+            ? `<span class="hora">${j.marcador_visitante}-${j.marcador_local} Final</span>`
+            : `<span class="hora">${formatearHora(j.hora_utc)}</span>`}
       </div>
     `).join("");
     const proximo = data.juegos.find(j => j.estado !== "Final" && j.estado !== "In Progress");
@@ -361,6 +471,38 @@ function traducirEntrada(estado) {
   return mapa[estado] || estado || "";
 }
 
+async function cargarResultadosGenerales() {
+  const cont = document.getElementById("resultados-generales-lista");
+  try {
+    const resp = await fetch(`${API_BASE}/api/resultados-generales?dias=2`);
+    const data = await resp.json();
+    if (!data.juegos.length) {
+      cont.innerHTML = `<div class="cargando">Sin resultados recientes de MLB.</div>`;
+      return;
+    }
+    cont.innerHTML = data.juegos.map(j => {
+      const [equipoVisitante, equipoLocal] = j.matchup.split(" @ ");
+      const visitanteGana = j.marcador_visitante > j.marcador_local;
+      const localGana = j.marcador_local > j.marcador_visitante;
+      return `
+        <div class="resultado-card">
+          <div class="resultado-fila ${visitanteGana ? 'gano' : ''}">
+            <span>${visitanteGana ? '🏆 ' : ''}${equipoVisitante}</span>
+            <span class="resultado-num">${j.marcador_visitante}</span>
+          </div>
+          <div class="resultado-fila ${localGana ? 'gano' : ''}">
+            <span>${localGana ? '🏆 ' : ''}${equipoLocal}</span>
+            <span class="resultado-num">${j.marcador_local}</span>
+          </div>
+          <div class="resultado-fecha">${j.fecha}</div>
+        </div>
+      `;
+    }).join("");
+  } catch (e) {
+    cont.innerHTML = `<div class="cargando">No se pudieron cargar los resultados de MLB.</div>`;
+  }
+}
+
 async function cargarMarcador() {
   const cont = document.getElementById("live-scores");
   try {
@@ -407,12 +549,108 @@ async function cargarMarcador() {
   }
 }
 
+let modoRegistro = false;
+const modalAuth = document.getElementById("modal-auth");
+const formAuth = document.getElementById("form-auth");
+const authError = document.getElementById("auth-error");
+const authSesionActiva = document.getElementById("auth-sesion-activa");
+const btnAbrirLogin = document.getElementById("btn-abrir-login");
+const authEmailActual = document.getElementById("auth-email-actual");
+
+btnAbrirLogin.addEventListener("click", () => {
+  authError.textContent = "";
+  modalAuth.style.display = "flex";
+});
+document.getElementById("btn-cerrar-modal").addEventListener("click", () => {
+  modalAuth.style.display = "none";
+});
+document.getElementById("auth-toggle-link").addEventListener("click", (e) => {
+  e.preventDefault();
+  modoRegistro = !modoRegistro;
+  document.getElementById("modal-auth-titulo").textContent = modoRegistro ? "Crear cuenta" : "Iniciar sesión";
+  document.getElementById("btn-auth-submit").textContent = modoRegistro ? "Crear cuenta" : "Entrar";
+  document.getElementById("auth-toggle-texto").textContent = modoRegistro ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?";
+  document.getElementById("auth-toggle-link").textContent = modoRegistro ? "Inicia sesión" : "Regístrate";
+  authError.textContent = "";
+});
+
+formAuth.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = document.getElementById("auth-email").value;
+  const password = document.getElementById("auth-password").value;
+  const ruta = modoRegistro ? "/api/auth/registro" : "/api/auth/login";
+  try {
+    const resp = await fetch(`${API_BASE}${ruta}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      authError.textContent = data.detail || "Error al procesar la solicitud.";
+      return;
+    }
+    modalAuth.style.display = "none";
+    formAuth.reset();
+    mostrarSesionActiva(data);
+  } catch (err) {
+    authError.textContent = "No se pudo conectar con el servidor.";
+  }
+});
+
+document.getElementById("btn-logout").addEventListener("click", async () => {
+  await fetch(`${API_BASE}/api/auth/logout`, { method: "POST" });
+  btnAbrirLogin.style.display = "inline-block";
+  authSesionActiva.style.display = "none";
+  document.getElementById("admin-seccion").style.display = "none";
+});
+
+function mostrarSesionActiva(usuario) {
+  btnAbrirLogin.style.display = "none";
+  authSesionActiva.style.display = "flex";
+  authEmailActual.textContent = usuario.email + (usuario.es_admin ? " (Admin)" : "");
+  if (usuario.es_admin) {
+    document.getElementById("admin-seccion").style.display = "block";
+    cargarUsuariosAdmin();
+  }
+}
+
+async function verificarSesion() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/auth/me`);
+    if (resp.ok) {
+      const usuario = await resp.json();
+      mostrarSesionActiva(usuario);
+    }
+  } catch (e) {}
+}
+
+async function cargarUsuariosAdmin() {
+  const cont = document.getElementById("admin-usuarios-lista");
+  try {
+    const resp = await fetch(`${API_BASE}/api/admin/usuarios`);
+    if (!resp.ok) { cont.innerHTML = `<div class="cargando">No autorizado.</div>`; return; }
+    const data = await resp.json();
+    cont.innerHTML = data.usuarios.map(u => `
+      <div class="juego-hoy">
+        <span>${u.email} ${u.es_admin ? '⭐' : ''}</span>
+        <span class="hora">${new Date(u.fecha_registro).toLocaleDateString('es-DO')}</span>
+      </div>
+    `).join("");
+  } catch (e) {
+    cont.innerHTML = `<div class="cargando">No se pudo cargar la lista de usuarios.</div>`;
+  }
+}
+
 conectar();
 cargarHoy();
 cargarRecientes();
+cargarResultadosGenerales();
 cargarMarcador();
+verificarSesion();
 setInterval(cargarHoy, 60000);
 setInterval(cargarRecientes, 300000);
+setInterval(cargarResultadosGenerales, 300000);
 setInterval(cargarMarcador, 8000);
 </script>
 

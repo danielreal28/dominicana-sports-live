@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 player_ids_cache.json
 .env
+usuarios.db
