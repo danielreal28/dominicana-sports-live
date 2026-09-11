@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dominicana Sports Live</title>
+<style>
+  :root {
+    --azul: #002d62;
+    --rojo: #ce1126;
+    --bg: #0b0f16;
+    --card: #131a24;
+    --texto: #e8edf2;
+    --muted: #8894a3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--texto);
+  }
+  header {
+    background: linear-gradient(90deg, var(--azul), var(--rojo));
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 20px;
+  }
+  #estado {
+    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(0,0,0,0.3);
+  }
+  #estado.conectado { color: #7CFC93; }
+  #estado.desconectado { color: #ffb3b3; }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    border-left: 4px solid var(--rojo);
+    animation: entrar 0.35s ease-out;
+  }
+  .card.resumen {
+    border-left-color: #ffd447;
+  }
+  @keyframes entrar {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .jugador {
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .evento {
+    color: var(--rojo);
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .descripcion {
+    margin-top: 4px;
+    color: var(--texto);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .matchup, .hora {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 6px;
+  }
+  .linea {
+    font-size: 14px;
+    margin: 3px 0;
+  }
+  #vacio {
+    text-align: center;
+    color: var(--muted);
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  section { margin-bottom: 28px; }
+  section h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin: 0 0 10px 4px;
+  }
+  .juego-hoy {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  .juego-hoy .hora { color: var(--muted); font-size: 12px; }
+  .juego-hoy .badge-live {
+    background: var(--rojo);
+    color: white;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 700;
+  }
+  .recent-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .recent-card .header-juego {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  .linea-jugador {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .linea-jugador:first-of-type { border-top: none; }
+  .foto-jugador {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #2a3341;
+    flex-shrink: 0;
+  }
+  .linea-jugador .nombre { font-weight: 600; font-size: 13px; }
+  .linea-jugador .stat { font-size: 12px; color: var(--muted); }
+  .cargando { color: var(--muted); font-size: 13px; padding: 8px 4px; }
+
+  .scoreboard-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border-left: 4px solid #4ade80;
+  }
+  .scoreboard-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .scoreboard-header .matchup { font-weight: 700; font-size: 15px; }
+  .scoreboard-header .inning { font-size: 12px; color: #4ade80; font-weight: 600; }
+  .scoreboard-marcador { font-size: 28px; font-weight: 800; letter-spacing: 1px; margin-bottom: 12px; }
+  .scoreboard-marcador .separador { color: var(--muted); margin: 0 8px; }
+  .scoreboard-detalle { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; }
+  .bases-diamante { position: relative; width: 40px; height: 40px; }
+  .base {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #2a3341;
+    border: 1px solid var(--muted);
+    transform: rotate(45deg);
+  }
+  .base.activa { background: #4ade80; border-color: #4ade80; }
+  .base.segunda { top: 0; left: 14px; }
+  .base.primera { bottom: 6px; right: 0; }
+  .base.tercera { bottom: 6px; left: 0; }
+  .outs-dots { display: flex; gap: 4px; }
+  .out-dot { width: 10px; height: 10px; border-radius: 50%; background: #2a3341; border: 1px solid var(--muted); }
+  .out-dot.activo { background: var(--rojo); border-color: var(--rojo); }
+  .conteo-bolas { font-size: 13px; color: var(--muted); }
+  .matchup-actual { font-size: 13px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+  .matchup-actual .fila { margin: 3px 0; }
+  .matchup-actual .destacado { color: #ffd447; font-weight: 700; }
+  .ultima-jugada {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .ultima-jugada.destacado-jugada { color: #ffd447; }
+  .ultima-jugada-evento {
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--texto);
+    margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🇩🇴 Dominicana Sports Live</h1>
+  <span id="estado" class="desconectado">conectando...</span>
+</header>
+
+<main>
+  <section>
+    <h2>Juegos de hoy</h2>
+    <div id="hoy-lista" class="cargando">Cargando calendario...</div>
+  </section>
+
+  <section>
+    <h2>Marcador en vivo</h2>
+    <div id="live-scores" class="cargando">Sin juegos en vivo ahora mismo.</div>
+  </section>
+
+  <section>
+    <h2>Últimos resultados de dominicanos</h2>
+    <div id="recent-lista" class="cargando">Cargando resultados recientes...</div>
+  </section>
+
+  <section>
+    <h2>En vivo ahora (dominicanos)</h2>
+    <div id="vacio">Esperando jugadas en vivo de peloteros dominicanos...</div>
+    <div id="feed"></div>
+  </section>
+</main>
+
+<script>
+const API_BASE = "";
+const WS_PROTOCOL = location.protocol === "https:" ? "wss:" : "ws:";
+const WS_URL = `${WS_PROTOCOL}//${location.host}/ws`;
+const feed = document.getElementById("feed");
+const vacio = document.getElementById("vacio");
+const estado = document.getElementById("estado");
+
+function conectar() {
+  const ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    estado.textContent = "en vivo";
+    estado.className = "conectado";
+  };
+
+  ws.onclose = () => {
+    estado.textContent = "reconectando...";
+    estado.className = "desconectado";
+    setTimeout(conectar, 2000); // reintenta solo, sin que el usuario haga nada
+  };
+
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    vacio.style.display = "none";
+    renderizar(data);
+  };
+}
+
+function renderizar(data) {
+  const card = document.createElement("div");
+  card.className = "card" + (data.type === "resumen_final" ? " resumen" : "");
+
+  if (data.type === "jugada") {
+    card.innerHTML = `
+      <div class="evento">${data.evento}</div>
+      <div class="jugador">🇩🇴 ${data.jugador}</div>
+      <div class="descripcion">${data.descripcion}</div>
+      <div class="matchup">${data.matchup}</div>
+    `;
+  } else if (data.type === "resumen_final") {
+    card.innerHTML = `
+      <div class="evento">Juego finalizado</div>
+      <div class="jugador">${data.matchup}</div>
+      <div class="descripcion">
+        ${data.lineas_dominicanos.map(l => `<div class="linea">🇩🇴 ${l}</div>`).join("")}
+      </div>
+    `;
+  }
+
+  feed.prepend(card); // lo más nuevo arriba, siempre
+}
+
+function formatearHora(isoUtc) {
+  if (!isoUtc) return "";
+  const d = new Date(isoUtc);
+  return d.toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" });
+}
+
+async function cargarHoy() {
+  const cont = document.getElementById("hoy-lista");
+  try {
+    const resp = await fetch(`${API_BASE}/api/today`);
+    const data = await resp.json();
+    if (!data.juegos.length) {
+      cont.innerHTML = `<div class="cargando">No hay juegos de MLB programados hoy.</div>`;
+      actualizarMensajeVacio(null);
+      return;
+    }
+    cont.innerHTML = data.juegos.map(j => `
+      <div class="juego-hoy">
+        <span>${j.matchup}</span>
+        ${j.estado === "In Progress"
+          ? `<span class="badge-live">EN VIVO</span>`
+          : `<span class="hora">${j.estado === "Final" ? "Final" : formatearHora(j.hora_utc)}</span>`}
+      </div>
+    `).join("");
+    const proximo = data.juegos.find(j => j.estado !== "Final" && j.estado !== "In Progress");
+    const hayEnVivo = data.juegos.some(j => j.estado === "In Progress");
+    actualizarMensajeVacio(hayEnVivo ? null : proximo);
+  } catch (e) {
+    cont.innerHTML = `<div class="cargando">No se pudo cargar el calendario de hoy.</div>`;
+  }
+}
+
+function actualizarMensajeVacio(proximoJuego) {
+  if (proximoJuego) {
+    vacio.textContent = `Nada en vivo ahora mismo. El pr\u00f3ximo juego (${proximoJuego.matchup}) empieza a las ${formatearHora(proximoJuego.hora_utc)}.`;
+  } else {
+    vacio.textContent = "Esperando jugadas en vivo de peloteros dominicanos...";
+  }
+}
+
+async function cargarRecientes() {
+  const cont = document.getElementById("recent-lista");
+  try {
+    const resp = await fetch(`${API_BASE}/api/recent?dias=3`);
+    const data = await resp.json();
+    if (!data.juegos.length) {
+      cont.innerHTML = `<div class="cargando">Sin resultados recientes de dominicanos en los \u00faltimos d\u00edas.</div>`;
+      return;
+    }
+    cont.innerHTML = data.juegos.map(j => `
+      <div class="recent-card">
+        <div class="header-juego">
+          <span>${j.matchup}</span>
+          <span>${j.fecha} \u00b7 ${j.marcador}</span>
+        </div>
+        ${j.lineas_dominicanos.map(l => `
+          <div class="linea-jugador">
+            <img class="foto-jugador" src="${l.foto || ''}" onerror="this.style.visibility='hidden'">
+            <div>
+              <div class="nombre">🇩🇴 ${l.jugador}</div>
+              <div class="stat">${l.texto}</div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `).join("");
+  } catch (e) {
+    cont.innerHTML = `<div class="cargando">No se pudieron cargar los resultados recientes.</div>`;
+  }
+}
+
+function traducirEntrada(estado) {
+  const mapa = { "Top": "Alta", "Bottom": "Baja", "Mid": "Cambio", "End": "Fin de entrada" };
+  return mapa[estado] || estado || "";
+}
+
+async function cargarMarcador() {
+  const cont = document.getElementById("live-scores");
+  try {
+    const resp = await fetch(`${API_BASE}/api/live`);
+    const data = await resp.json();
+    if (!data.juegos.length) {
+      cont.innerHTML = `<div class="cargando">Sin juegos en vivo ahora mismo.</div>`;
+      return;
+    }
+    cont.innerHTML = data.juegos.map(j => `
+      <div class="scoreboard-card">
+        <div class="scoreboard-header">
+          <span class="matchup">${j.matchup}</span>
+          <span class="inning">${traducirEntrada(j.entrada_estado)} ${j.entrada || ''}</span>
+        </div>
+        <div class="scoreboard-marcador">
+          ${j.marcador_visitante}<span class="separador">-</span>${j.marcador_local}
+        </div>
+        <div class="scoreboard-detalle">
+          <div class="bases-diamante">
+            <div class="base segunda ${j.bases.segunda ? 'activa' : ''}"></div>
+            <div class="base primera ${j.bases.primera ? 'activa' : ''}"></div>
+            <div class="base tercera ${j.bases.tercera ? 'activa' : ''}"></div>
+          </div>
+          <div class="outs-dots">
+            ${[0, 1, 2].map(i => `<div class="out-dot ${i < j.outs ? 'activo' : ''}"></div>`).join("")}
+          </div>
+          <div class="conteo-bolas">${j.bolas}-${j.strikes}</div>
+        </div>
+        <div class="matchup-actual">
+          <div class="fila">Bate: <span class="${j.bateador_es_dominicano ? 'destacado' : ''}">${j.bateador_bandera || '🏳️'} ${j.bateador || '-'}</span></div>
+          <div class="fila">Lanza: <span class="${j.pitcher_es_dominicano ? 'destacado' : ''}">${j.pitcher_bandera || '🏳️'} ${j.pitcher || '-'}</span></div>
+          ${j.ultima_jugada ? `
+            <div class="ultima-jugada ${j.ultima_jugada.es_dominicano ? 'destacado-jugada' : ''}">
+              <span class="ultima-jugada-evento">${j.ultima_jugada.evento || 'Jugada'}</span>
+              ${j.ultima_jugada.es_dominicano ? '🇩🇴' : ''} ${j.ultima_jugada.descripcion || ''}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    cont.innerHTML = `<div class="cargando">No se pudo cargar el marcador en vivo.</div>`;
+  }
+}
+
+conectar();
+cargarHoy();
+cargarRecientes();
+cargarMarcador();
+setInterval(cargarHoy, 60000);
+setInterval(cargarRecientes, 300000);
+setInterval(cargarMarcador, 8000);
+</script>
+
+</body>
+</html>
