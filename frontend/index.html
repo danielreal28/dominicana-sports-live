@@ -266,6 +266,18 @@
   .resultado-fila.gano { color: var(--texto); font-weight: 700; }
   .resultado-num { min-width: 24px; text-align: right; }
   .resultado-fecha { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  @media (max-width: 480px) {
+    header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px 16px;
+    }
+    header h1 { font-size: 17px; }
+    .header-derecha { width: 100%; justify-content: space-between; }
+    .modal-caja { max-width: 90vw; padding: 22px 18px; }
+  }
 </style>
 </head>
 <body>
